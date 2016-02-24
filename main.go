@@ -48,7 +48,7 @@ func main() {
 			Usage:  "URI to healthcheck, must return status 200",
 		},
 		cli.StringFlag{
-			Name:   "vulcan-uri, v",
+			Name:   "vulcan-uri, V",
 			EnvVar: "REGISTER_VULCAN_VULCAN_URI",
 			Usage:  "VULCAN URI to register server to",
 		},
