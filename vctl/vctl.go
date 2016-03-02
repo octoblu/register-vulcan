@@ -1,8 +1,6 @@
 package vctl
 
 import (
-	"time"
-
 	"github.com/octoblu/vulcand-bundle/registry"
 	"github.com/vulcand/vulcand/api"
 	"github.com/vulcand/vulcand/engine"
@@ -10,7 +8,7 @@ import (
 
 // Vctl executes vctl commands
 type Vctl interface {
-	ServerUpsert(id, backendID, uri string, ttl time.Duration) error
+	ServerUpsert(id, backendID, uri string) error
 	ServerRm(id, backendID string) error
 }
 
@@ -30,15 +28,28 @@ func New(vulcanURL string) (Vctl, error) {
 }
 
 // ServerUpsert upserts a new server
-func (command *vctlClient) ServerUpsert(id, backendID, uri string, ttl time.Duration) error {
+func (command *vctlClient) ServerUpsert(id, backendID, uri string) error {
+	backendKey := engine.BackendKey{Id: backendID}
+
+	oldServer, err := command.client.GetServer(engine.ServerKey{Id: id, BackendKey: backendKey})
+	if err != nil {
+		return command.doServerUpsert(id, uri, backendKey)
+	}
+
+	if uri != oldServer.URL {
+		return command.doServerUpsert(id, uri, backendKey)
+	}
+
+	return nil
+}
+
+func (command *vctlClient) doServerUpsert(id, uri string, backendKey engine.BackendKey) error {
 	server, err := engine.NewServer(id, uri)
 	if err != nil {
 		return err
 	}
 
-	backendKey := engine.BackendKey{Id: backendID}
-
-	return command.client.UpsertServer(backendKey, *server, ttl)
+	return command.client.UpsertServer(backendKey, *server, 0)
 }
 
 func (command *vctlClient) ServerRm(id, backendID string) error {

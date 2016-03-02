@@ -36,12 +36,6 @@ func main() {
 			EnvVar: "REGISTER_VULCAN_SERVER_ID",
 			Usage:  "Server ID",
 		},
-		cli.DurationFlag{
-			Name:   "ttl, t",
-			EnvVar: "REGISTER_VULCAN_TTL",
-			Usage:  "ttl for server keys (in case of unexpected register-vulcan death)",
-			Value:  11 * time.Second,
-		},
 		cli.StringFlag{
 			Name:   "uri, u",
 			EnvVar: "REGISTER_VULCAN_URI",
@@ -57,10 +51,10 @@ func main() {
 }
 
 func run(context *cli.Context) {
-	vulcanURI, serverID, backendID, uri, ttl := getOpts(context)
+	vulcanURI, serverID, backendID, uri := getOpts(context)
 
 	control := make(chan bool)
-	go loop(vulcanURI, serverID, backendID, uri, ttl, control)
+	go loop(vulcanURI, serverID, backendID, uri, control)
 	go iterate(control)
 
 	sigTerm := make(chan os.Signal)
@@ -77,7 +71,7 @@ func run(context *cli.Context) {
 			onNotHealthy(vulcanURI, serverID, backendID)
 			fmt.Println("deregistered, paused for 5 seconds")
 			time.Sleep(5 * time.Second)
-			go loop(vulcanURI, serverID, backendID, uri, ttl, control)
+			go loop(vulcanURI, serverID, backendID, uri, control)
 		}
 	}()
 
@@ -88,12 +82,12 @@ func run(context *cli.Context) {
 	os.Exit(0)
 }
 
-func loop(vulcanURI, serverID, backendID, uri string, ttl time.Duration, control <-chan bool) {
+func loop(vulcanURI, serverID, backendID, uri string, control <-chan bool) {
 	for {
 		if !<-control {
 			return
 		}
-		healthcheck(vulcanURI, serverID, backendID, uri, ttl)
+		healthcheck(vulcanURI, serverID, backendID, uri)
 	}
 }
 
@@ -104,21 +98,21 @@ func iterate(control chan<- bool) {
 	}
 }
 
-func healthcheck(vulcanURI, serverID, backendID, uri string, ttl time.Duration) {
+func healthcheck(vulcanURI, serverID, backendID, uri string) {
 	if healthchecker.Healthy(fmt.Sprintf("%v/healthcheck", uri)) {
-		onHealthy(vulcanURI, serverID, backendID, uri, ttl)
+		onHealthy(vulcanURI, serverID, backendID, uri)
 	} else {
 		onNotHealthy(vulcanURI, serverID, backendID)
 	}
 }
 
-func onHealthy(vulcanURI, serverID, backendID, uri string, ttl time.Duration) {
+func onHealthy(vulcanURI, serverID, backendID, uri string) {
 	debug("onHealthy")
 
 	vctlClient, err := vctl.New(vulcanURI)
 	FatalIfError("vctl.New vulcanURI", err)
 
-	err = vctlClient.ServerUpsert(serverID, backendID, uri, ttl)
+	err = vctlClient.ServerUpsert(serverID, backendID, uri)
 	FatalIfError("vctlClient.ServerUpsert", err)
 }
 
@@ -132,10 +126,9 @@ func onNotHealthy(vulcanURI, serverID, backendID string) {
 	FatalIfError("vctlClient.ServerRm", err)
 }
 
-func getOpts(context *cli.Context) (string, string, string, string, time.Duration) {
+func getOpts(context *cli.Context) (string, string, string, string) {
 	backendID := context.String("backend-id")
 	serverID := context.String("server-id")
-	ttl := context.Duration("ttl")
 	vulcanURI := context.String("vulcan-uri")
 	uri := context.String("uri")
 
@@ -160,7 +153,7 @@ func getOpts(context *cli.Context) (string, string, string, string, time.Duratio
 	validateURI(uri)
 	validateURI(vulcanURI)
 
-	return vulcanURI, serverID, backendID, uri, ttl
+	return vulcanURI, serverID, backendID, uri
 }
 
 func validateURI(uriStr string) {
